@@ -1,12 +1,47 @@
 using Microsoft.Xna.Framework.Graphics;
 using ReLogic.Content;
 using System.Collections.Generic;
+using System.Linq;
+using Terraria;
 using Terraria.ModLoader;
+using Terraria.ModLoader.IO;
 
 namespace AchievementSystem {
 	public class AchievementSystem : Mod {
 		public override void Unload() {
 			AchievementLoader.Unload();
+		}
+	}
+	public class AchievementPlayer : ModPlayer {
+		public HashSet<int> achievedAchievements;
+		public List<string> unloadedAchievements;
+		public override void PostUpdate() {
+			achievedAchievements ??= new();
+			for (int i = 0; i < AchievementLoader.AchievementCount; i++) {
+				if (!achievedAchievements.Contains(i) && AchievementLoader.GetAchievement(i).IsUnlocked()) {
+					achievedAchievements.Add(i);
+				}
+			}
+		}
+		public override void SaveData(TagCompound tag) {
+			unloadedAchievements ??= new();
+			tag[nameof(achievedAchievements)] = achievedAchievements
+				.Select(a => AchievementLoader.GetAchievement(a).FullName)
+				.Union(unloadedAchievements)
+				.ToList();
+		}
+		public override void LoadData(TagCompound tag) {
+			achievedAchievements ??= new();
+			unloadedAchievements ??= new();
+			if (tag.TryGet(nameof(achievedAchievements), out List<string> achievements)) {
+				foreach (string item in achievements) {
+					if (ModContent.TryFind<ModAchievement>(item, out var modAchievement)) {
+						achievedAchievements.Add(modAchievement.Type);
+					} else {
+						unloadedAchievements.Add(item);
+					}
+				}
+			}
 		}
 	}
 	public static class AchievementLoader {
@@ -46,5 +81,6 @@ namespace AchievementSystem {
 			Description = LocalizationLoader.GetOrCreateTranslation(Mod, "BuffDescription." + Name);
 			AchievementLoader.achievements.Add(this);
 		}
+		public virtual bool IsUnlocked() => false;
 	}
 }
